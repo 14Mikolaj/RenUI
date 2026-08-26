@@ -1,4 +1,4 @@
-<img width="1309" height="684" alt="image" src="https://github.com/user-attachments/assets/2271249f-31a1-4d4f-bece-a4dd469d52d2" /># RenUI
+# RenUI
 
 RenUI is a reusable C++17 user-interface library for SFML 3. It provides
 screen-space widgets, responsive layout helpers, theming, text and UI scaling,
@@ -18,7 +18,6 @@ it from another project.
 
 <img width="492" height="320" alt="image" src="https://github.com/user-attachments/assets/393a95e2-c172-4908-9ece-71558c5cf881" />
 <img width="804" height="924" alt="image" src="https://github.com/user-attachments/assets/c244ce89-6a11-4ced-90d5-1cbde8752068" />
-<img width="1309" height="684" alt="image" src="https://github.com/user-attachments/assets/9a1cd7a7-42dd-42a7-95d5-dbf2a47012b9" />
 
 Features:
 - Buttons and text input fields, including password/masked input and state handling
