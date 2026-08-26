@@ -7,6 +7,7 @@
 #include <RenUI/RenUI.hpp>
 #include <SFML/Window/Clipboard.hpp>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 namespace RenUI {

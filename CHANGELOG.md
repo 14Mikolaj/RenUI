@@ -8,6 +8,15 @@ changes.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-26
+
+### Fixed
+
+- Added the explicit standard-library math dependency required by portable
+  Linux builds.
+- Made installed-package CI discovery portable across PowerShell, Git Bash,
+  and POSIX shells.
+
 ## [0.1.3] - 2026-08-26
 
 ### Added
@@ -21,5 +30,6 @@ changes.
 - Static or shared CMake builds, optional fetching of a tested SFML release,
   installable package metadata, and source/install consumer smoke tests.
 
-[Unreleased]: https://github.com/14Mikolaj/RenUI/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/14Mikolaj/RenUI/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/14Mikolaj/RenUI/releases/tag/v0.1.4
 [0.1.3]: https://github.com/14Mikolaj/RenUI/releases/tag/v0.1.3

@@ -11,7 +11,7 @@ header:
 
 The CMake target is `RenUI::RenUI`.
 
-RenUI is currently at version **0.1.3**. It is pre-1.0 software: the library is
+RenUI is currently at version **0.1.4**. It is pre-1.0 software: the library is
 usable, but source and API compatibility may change between minor releases
 while the public interface settles. Pin a release tag or commit when consuming
 it from another project.
@@ -81,7 +81,7 @@ cmake --install build --config Release --prefix /path/to/renui-install
 In the consuming project:
 
 ```cmake
-find_package(RenUI 0.1.3 CONFIG REQUIRED)
+find_package(RenUI 0.1.4 CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE RenUI::RenUI)
 ```
 
@@ -130,7 +130,7 @@ include(FetchContent)
 FetchContent_Declare(
     RenUI
     GIT_REPOSITORY https://github.com/14Mikolaj/RenUI.git
-    GIT_TAG v0.1.3
+    GIT_TAG v0.1.4
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(RenUI)

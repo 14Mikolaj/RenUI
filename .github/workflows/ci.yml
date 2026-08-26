@@ -65,7 +65,7 @@ jobs:
         run: >-
           cmake -S tests/install-consumer -B build-consumer
           -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_PREFIX_PATH="$PWD/stage;$PWD/build/_deps/sfml-build"
+          -DCMAKE_PREFIX_PATH="$PWD/stage"
           -DSFML_STATIC_LIBRARIES=${{ matrix.linkage.sfml_static }}
 
       - name: Build installed-package consumer

@@ -15,7 +15,7 @@ body:
     attributes:
       label: RenUI version
       description: Provide a release tag or commit hash.
-      placeholder: v0.1.3 or a commit hash
+      placeholder: v0.1.4 or a commit hash
     validations:
       required: true
 
