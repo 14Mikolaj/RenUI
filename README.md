@@ -16,6 +16,23 @@ usable, but source and API compatibility may change between minor releases
 while the public interface settles. Pin a release tag or commit when consuming
 it from another project.
 
+<img width="492" height="320" alt="image" src="https://github.com/user-attachments/assets/393a95e2-c172-4908-9ece-71558c5cf881" />
+<img width="804" height="924" alt="image" src="https://github.com/user-attachments/assets/c244ce89-6a11-4ced-90d5-1cbde8752068" />
+
+Features:
+- Buttons and text input fields, including password/masked input and state handling
+- Tileable and collapsible panels/menus
+- Continuous and stepped sliders
+- Hover tooltips
+- Tables and structured data layouts
+- Custom asset/atlas mapping
+- Generalized themes and semantic colour schemes
+- Scalable UI/text rendering
+- Disabled, hover, active and focus states
+- Reusable resource loading abstraction for loose files / packed assets
+- Optional shader-backed UI effects
+- SFML 3 integration with C++17
+
 ## Requirements
 
 - CMake 3.16 or newer
