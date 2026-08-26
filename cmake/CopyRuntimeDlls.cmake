@@ -1,0 +1,21 @@
+if(NOT DEFINED RENUI_RUNTIME_DESTINATION OR
+   RENUI_RUNTIME_DESTINATION STREQUAL "")
+    message(FATAL_ERROR "RENUI_RUNTIME_DESTINATION is required")
+endif()
+
+if(NOT DEFINED RENUI_RUNTIME_DLLS OR RENUI_RUNTIME_DLLS STREQUAL "")
+    return()
+endif()
+
+string(REPLACE "|" ";" RENUI_RUNTIME_DLL_LIST "${RENUI_RUNTIME_DLLS}")
+foreach(RENUI_RUNTIME_DLL IN LISTS RENUI_RUNTIME_DLL_LIST)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${RENUI_RUNTIME_DLL}" "${RENUI_RUNTIME_DESTINATION}"
+        RESULT_VARIABLE RENUI_COPY_RESULT
+    )
+    if(NOT RENUI_COPY_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to stage runtime dependency: ${RENUI_RUNTIME_DLL}")
+    endif()
+endforeach()

@@ -1,0 +1,77 @@
+name: Bug report
+description: Report a reproducible problem in RenUI
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. For security-sensitive
+        reports, stop here and use private vulnerability reporting instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: RenUI version
+      description: Provide a release tag or commit hash.
+      placeholder: v0.1.3 or a commit hash
+    validations:
+      required: true
+
+  - type: input
+    id: sfml-version
+    attributes:
+      label: SFML version
+      placeholder: 3.x.x
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the operating system, compiler, CMake version, and static or shared build.
+      placeholder: Windows 11, MSVC 19.xx, CMake 3.xx, static
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest code sample and exact steps that reproduce the problem.
+      render: cpp
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics and logs
+      description: Include relevant RenUI diagnostics, CMake output, or debugger details. Remove secrets and personal data.
+      render: shell
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add screenshots, resource configuration, or other useful context.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: This report does not disclose a security vulnerability.
+          required: true

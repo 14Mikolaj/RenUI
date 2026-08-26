@@ -1,0 +1,31 @@
+# Out-of-source CMake directories
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+/install/
+
+# Accidental in-source CMake output
+/CMakeCache.txt
+/CMakeFiles/
+/CTestTestfile.cmake
+/Makefile
+/build.ninja
+/.ninja_deps
+/.ninja_log
+/cmake_install.cmake
+/compile_commands.json
+/CMakeUserPresets.json
+/generated/
+/install_manifest.txt
+/RenUIConfig.cmake
+/RenUIConfigVersion.cmake
+/RenUITargets.cmake
+/RenUITargets-*.cmake
+
+# Local IDE and operating-system state
+/.vs/
+*.suo
+*.user
+.DS_Store
+Thumbs.db

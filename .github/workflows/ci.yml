@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-install:
+    name: ${{ matrix.platform.name }} / ${{ matrix.linkage.name }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Windows
+            os: windows-latest
+          - name: Linux
+            os: ubuntu-latest
+        linkage:
+          - name: Static
+            shared: OFF
+            sfml_static: ON
+          - name: Shared
+            shared: ON
+            sfml_static: OFF
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libxrandr-dev libxcursor-dev libxi-dev libudev-dev
+          libgl1-mesa-dev libegl1-mesa-dev libfreetype-dev
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=${{ matrix.linkage.shared }}
+          -DRENUI_BUILD_TESTS=ON
+          -DRENUI_FETCH_SFML=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test source package
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Install
+        run: cmake --install build --config Release --prefix "$PWD/stage"
+
+      - name: Configure installed-package consumer
+        run: >-
+          cmake -S tests/install-consumer -B build-consumer
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="$PWD/stage;$PWD/build/_deps/sfml-build"
+          -DSFML_STATIC_LIBRARIES=${{ matrix.linkage.sfml_static }}
+
+      - name: Build installed-package consumer
+        run: cmake --build build-consumer --config Release --parallel
+
+      - name: Test installed package
+        run: ctest --test-dir build-consumer -C Release --output-on-failure

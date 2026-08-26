@@ -1,0 +1,36 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_package(SFML 3 COMPONENTS Graphics Window System QUIET)
+if(NOT TARGET SFML::Graphics)
+    if(TARGET sfml-graphics AND TARGET sfml-window AND TARGET sfml-system)
+        add_library(SFML::Graphics INTERFACE IMPORTED GLOBAL)
+        add_library(SFML::Window INTERFACE IMPORTED GLOBAL)
+        add_library(SFML::System INTERFACE IMPORTED GLOBAL)
+        set_property(TARGET SFML::Graphics PROPERTY INTERFACE_LINK_LIBRARIES sfml-graphics)
+        set_property(TARGET SFML::Window PROPERTY INTERFACE_LINK_LIBRARIES sfml-window)
+        set_property(TARGET SFML::System PROPERTY INTERFACE_LINK_LIBRARIES sfml-system)
+    else()
+        find_dependency(PkgConfig)
+        pkg_check_modules(RenUISFML REQUIRED IMPORTED_TARGET
+            sfml-graphics>=3 sfml-window>=3 sfml-system>=3)
+        add_library(SFML::Graphics INTERFACE IMPORTED GLOBAL)
+        add_library(SFML::Window INTERFACE IMPORTED GLOBAL)
+        add_library(SFML::System INTERFACE IMPORTED GLOBAL)
+        set_property(TARGET SFML::Graphics PROPERTY
+            INTERFACE_LINK_LIBRARIES PkgConfig::RenUISFML)
+        set_property(TARGET SFML::Window PROPERTY
+            INTERFACE_LINK_LIBRARIES PkgConfig::RenUISFML)
+        set_property(TARGET SFML::System PROPERTY
+            INTERFACE_LINK_LIBRARIES PkgConfig::RenUISFML)
+    endif()
+endif()
+
+if(NOT TARGET SFML::Graphics OR NOT TARGET SFML::Window OR NOT TARGET SFML::System)
+    set(RenUI_FOUND FALSE)
+    set(RenUI_NOT_FOUND_MESSAGE "RenUI requires SFML 3 Graphics, Window, and System targets")
+    return()
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/RenUITargets.cmake")
+check_required_components(RenUI)
