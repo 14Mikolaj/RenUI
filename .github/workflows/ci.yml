@@ -79,7 +79,8 @@ jobs:
       - name: Test installed package
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
-            xvfb-run -a ctest --test-dir build-consumer -C Release --output-on-failure
+            LD_LIBRARY_PATH="$PWD/stage/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+              xvfb-run -a ctest --test-dir build-consumer -C Release --output-on-failure
           else
             ctest --test-dir build-consumer -C Release --output-on-failure
           fi

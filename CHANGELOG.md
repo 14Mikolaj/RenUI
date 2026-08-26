@@ -16,7 +16,7 @@ changes.
   Linux builds.
 - Made installed-package CI discovery portable across PowerShell, Git Bash,
   and POSIX shells, with graphical smoke tests running under a virtual X
-  display on headless Linux runners.
+  display and staged shared libraries available on headless Linux runners.
 
 ## [0.1.3] - 2026-08-26
 
