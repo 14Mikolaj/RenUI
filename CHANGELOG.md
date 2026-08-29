@@ -8,6 +8,14 @@ changes.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-29
+
+### Added
+
+- Added a named-slice directional-marker overload so applications can render
+  distinct rotatable navigation and targeting indicators with the existing
+  atlas-independent vector fallback.
+
 ## [0.1.4] - 2026-08-26
 
 ### Fixed
@@ -31,6 +39,7 @@ changes.
 - Static or shared CMake builds, optional fetching of a tested SFML release,
   installable package metadata, and source/install consumer smoke tests.
 
-[Unreleased]: https://github.com/14Mikolaj/RenUI/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/14Mikolaj/RenUI/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/14Mikolaj/RenUI/releases/tag/v0.1.5
 [0.1.4]: https://github.com/14Mikolaj/RenUI/releases/tag/v0.1.4
 [0.1.3]: https://github.com/14Mikolaj/RenUI/releases/tag/v0.1.3

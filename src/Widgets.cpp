@@ -50,19 +50,22 @@ void drawHoverGlowBackdrop(sf::RenderWindow& window,
                            const sf::Vector2f& size,
                            float glowStrength,
                            float glowProgress,
-                           float widthScale) {
+                           float widthScale,
+                           float minimumVisualWidth) {
     if (glowStrength <= 0.0f || glowProgress <= 0.0f) return;
 
     sf::Shader* shader = getHoverGlowShader();
     if (!shader) return;
 
     widthScale = std::max(0.0f, widthScale);
-    const float visualWidth = size.x * widthScale;
+    const float visualWidth = std::max(size.x * widthScale,
+                                       std::max(0.0f, minimumVisualWidth));
+    const float effectiveWidthScale = visualWidth / std::max(1.0f, size.x);
     const sf::Vector2f visualPosition(
         position.x + (size.x - visualWidth) * 0.5f,
         position.y);
     const sf::Vector2f visualSize(visualWidth, size.y);
-    const sf::Vector2f pad(80.0f * widthScale, 46.0f);
+    const sf::Vector2f pad(80.0f * effectiveWidthScale, 46.0f);
     sf::RectangleShape glowRect;
     glowRect.setPosition({visualPosition.x - pad.x, visualPosition.y - pad.y});
     glowRect.setSize({visualSize.x + pad.x * 2.0f, visualSize.y + pad.y * 2.0f});
@@ -368,8 +371,15 @@ void UIButton::draw(sf::RenderWindow& window) const {
 
         hoverBlend = hoverAnim_ * hoverAnim_ * (3.0f - 2.0f * hoverAnim_);
         const float glowStrength = 0.95f * hoverBlend;
+        constexpr float HOVER_GLOW_LABEL_SIDE_MARGIN = 24.0f;
+        const float labelWidth = text_
+            ? getScaledLocalBounds(*text_).size.x
+            : 0.0f;
+        const float minimumGlowWidth = labelWidth > 0.0f
+            ? labelWidth + HOVER_GLOW_LABEL_SIDE_MARGIN * 2.0f
+            : 0.0f;
         drawHoverGlowBackdrop(window, shape_.getPosition(), shape_.getSize(), glowStrength,
-                              hoverBlend, hoverGlowWidthScale_);
+                              hoverBlend, hoverGlowWidthScale_, minimumGlowWidth);
     }
 
     sf::RectangleShape drawShape = shape_;

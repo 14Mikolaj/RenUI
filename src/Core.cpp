@@ -1021,9 +1021,19 @@ void drawDirectionalMarker(sf::RenderWindow& window,
                            float displaySize,
                            sf::Angle rotation,
                            sf::Color tint) {
+    drawDirectionalMarker(window, center, displaySize, rotation,
+                          "direction_indicator_grey", tint);
+}
+
+void drawDirectionalMarker(sf::RenderWindow& window,
+                           const sf::Vector2f& center,
+                           float displaySize,
+                           sf::Angle rotation,
+                           const std::string& sliceName,
+                           sf::Color tint) {
     const float size = std::max(1.0f, displaySize);
     sf::IntRect sliceRect;
-    if (getUiAtlasSliceRect("direction_indicator_grey", sliceRect) &&
+    if (getUiAtlasSliceRect(sliceName, sliceRect) &&
         s_uiElementsAtlasTexture) {
         sf::Sprite icon(*s_uiElementsAtlasTexture, sliceRect);
         const float iconW = static_cast<float>(std::max(1, sliceRect.size.x));

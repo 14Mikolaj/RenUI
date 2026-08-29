@@ -218,6 +218,15 @@ RENUI_API void drawDirectionalMarker(sf::RenderWindow& window,
                                      sf::Angle rotation,
                                      sf::Color tint = sf::Color::White);
 
+// Named-slice variant for semantically distinct markers that share the same
+// rotation and vector fallback contract (for example navigation vs aiming).
+RENUI_API void drawDirectionalMarker(sf::RenderWindow& window,
+                                     const sf::Vector2f& center,
+                                     float displaySize,
+                                     sf::Angle rotation,
+                                     const std::string& sliceName,
+                                     sf::Color tint = sf::Color::White);
+
 // ═══════════════════════════════════════════════════════════════════
 //  LIGHTWEIGHT DRAW HELPERS  (one-shot convenience renderers)
 // ═══════════════════════════════════════════════════════════════════
