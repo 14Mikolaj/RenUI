@@ -47,6 +47,12 @@ int main(int argc, char** argv) {
         RenUI::isLargeTextRefinementEnabled() &&
         RenUI::getTextMetricsRevision() > directTextRevision;
 
+    using NamedMarkerFunction = void (*)(
+        sf::RenderWindow&, const sf::Vector2f&, float, sf::Angle,
+        const std::string&, sf::Color);
+    const NamedMarkerFunction namedMarker = &RenUI::drawDirectionalMarker;
+    const bool namedMarkerApiWorks = namedMarker != nullptr;
+
     bool lateFontWorks = true;
     if (argc > 1) {
         RenUI::Config late;
@@ -63,7 +69,7 @@ int main(int argc, char** argv) {
 
     RenUI::shutdown();
     return missingFallbackWorks && lateFontWorks && responsiveGeometryWorks &&
-                   textRefinementToggleWorks
+                   textRefinementToggleWorks && namedMarkerApiWorks
         ? 0
         : 1;
 }
