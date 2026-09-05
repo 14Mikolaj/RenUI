@@ -11,7 +11,7 @@ header:
 
 The CMake target is `RenUI::RenUI`.
 
-RenUI is currently at version **0.1.4**. It is pre-1.0 software: the library is
+RenUI is currently at version **0.1.12**. It is pre-1.0 software: the library is
 usable, but source and API compatibility may change between minor releases
 while the public interface settles. Pin a release tag or commit when consuming
 it from another project.
@@ -22,6 +22,7 @@ it from another project.
 Features:
 - Buttons and text input fields, including password/masked input and state handling
 - Tileable and collapsible panels/menus
+- Optional named-atlas nine-slice panel skins and corner close states
 - Continuous and stepped sliders
 - Hover tooltips
 - Tables and structured data layouts
@@ -98,7 +99,7 @@ cmake --install build --config Release --prefix /path/to/renui-install
 In the consuming project:
 
 ```cmake
-find_package(RenUI 0.1.4 CONFIG REQUIRED)
+find_package(RenUI 0.1.12 CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE RenUI::RenUI)
 ```
 
@@ -147,7 +148,7 @@ include(FetchContent)
 FetchContent_Declare(
     RenUI
     GIT_REPOSITORY https://github.com/14Mikolaj/RenUI.git
-    GIT_TAG v0.1.4
+    GIT_TAG v0.1.12
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(RenUI)
@@ -193,6 +194,47 @@ save.draw(window);
 // At application shutdown, after the render loop:
 RenUI::shutdown();
 ```
+
+Panels can opt into a named nine-slice skin from the configured atlas. The
+optional close artwork uses a reference slice whose width and height define
+its right and top inset within the top-right corner:
+
+```cpp
+RenUI::NineSlicePanelData skin{
+    "panel_tl", "panel_t", "panel_tr",
+    "panel_l", "panel_center", "panel_r",
+    "panel_bl", "panel_b", "panel_br",
+    RenUI::NineSliceCloseButtonData{
+        "panel_close", "panel_close_hover", "panel_close_inset",
+        "panel_close_unavailable"}
+};
+
+RenUI::Panel panel({24.f, 24.f}, {320.f, 180.f}, skin);
+const auto closeBounds = panel.getCloseButtonBounds();
+panel.setCloseHovered(closeBounds && closeBounds->contains(logicalMouse));
+panel.draw(window);
+```
+
+If any required panel slice is missing, `Panel` draws its existing primitive
+fallback. If only close artwork is unavailable, the panel skin still renders
+and `getCloseButtonBounds()` returns no value so the host can retain its normal
+close control. The tinted `drawNineSlicePanel()` overload supports translucent
+HUD chrome by multiplying every panel and close slice by a supplied color.
+`setNineSlicePanelTint()` updates the default tint used by existing skinned
+panels and windows, allowing live application-wide opacity preferences.
+
+`DraggableWindow::setNineSliceData()` applies the same skin to window chrome.
+Its existing event path, or the mapped-pointer `handleEvent()` overload, treats
+the complete rendered top-right corner as the close target and selects the
+configured normal or hovered artwork automatically.
+Set `NineSlicePanelData::closeButtonAvailable` to `false` to draw the optional
+unavailable artwork instead; that state deliberately returns no close bounds.
+
+`setUiAtlasSliceAlias()` maps stable logical names to style-specific slices at
+draw time, allowing already-constructed widgets to switch styles. Configure
+`setDefaultTextButtonNineSliceData()` to give every framed `UIButton` with a
+non-empty label shared nine-slice chrome; icon-only and frameless controls keep
+their existing renderers, and missing slices retain the primitive fallback.
 
 `InitializationResult` reports which capabilities were enabled. The same
 diagnostics are available through `RenUI::getDiagnostics()`, and applications

@@ -10,6 +10,7 @@
 
 #include <RenUI/RenUI.hpp>
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -48,9 +49,12 @@ static bool s_largeTextRefinementEnabled = false;
 static std::unique_ptr<sf::Texture> s_uiElementsAtlasTexture;
 static bool s_uiAtlasSlicesResolved = false;
 static std::unordered_map<std::string, sf::IntRect> s_uiAtlasSlices;
+static std::unordered_map<std::string, std::string> s_uiAtlasSliceAliases;
+static std::optional<NineSlicePanelData> s_defaultTextButtonNineSliceData;
 static bool s_closeWindowSliceResolved = false;
 static bool s_closeWindowSliceLoaded = false;
 static sf::IntRect s_closeWindowSliceRect;
+static sf::Color s_nineSlicePanelTint = sf::Color::White;
 static Config s_config;
 static bool s_initialized = false;
 static std::uint64_t s_initializationRevision = 1;
@@ -346,6 +350,120 @@ static bool ensureCloseWindowSliceLoaded_() {
     return s_closeWindowSliceLoaded;
 }
 
+namespace {
+
+struct ResolvedNineSlicePanel {
+    sf::IntRect topLeft;
+    sf::IntRect top;
+    sf::IntRect topRight;
+    sf::IntRect left;
+    sf::IntRect center;
+    sf::IntRect right;
+    sf::IntRect bottomLeft;
+    sf::IntRect bottom;
+    sf::IntRect bottomRight;
+};
+
+bool resolveNineSlicePanel_(const NineSlicePanelData& data,
+                            ResolvedNineSlicePanel& resolved) {
+    return getUiAtlasSliceRect(data.topLeftSlice, resolved.topLeft) &&
+           getUiAtlasSliceRect(data.topSlice, resolved.top) &&
+           getUiAtlasSliceRect(data.topRightSlice, resolved.topRight) &&
+           getUiAtlasSliceRect(data.leftSlice, resolved.left) &&
+           getUiAtlasSliceRect(data.centerSlice, resolved.center) &&
+           getUiAtlasSliceRect(data.rightSlice, resolved.right) &&
+           getUiAtlasSliceRect(data.bottomLeftSlice, resolved.bottomLeft) &&
+           getUiAtlasSliceRect(data.bottomSlice, resolved.bottom) &&
+           getUiAtlasSliceRect(data.bottomRightSlice, resolved.bottomRight);
+}
+
+struct NineSliceLayout {
+    std::array<sf::FloatRect, 9> pieces;
+};
+
+NineSliceLayout layoutNineSlicePanel_(const sf::FloatRect& bounds,
+                                      const ResolvedNineSlicePanel& source) {
+    float leftWidth = static_cast<float>(
+        std::max(source.topLeft.size.x, source.bottomLeft.size.x));
+    float rightWidth = static_cast<float>(
+        std::max(source.topRight.size.x, source.bottomRight.size.x));
+    float topHeight = static_cast<float>(
+        std::max(source.topLeft.size.y, source.topRight.size.y));
+    float bottomHeight = static_cast<float>(
+        std::max(source.bottomLeft.size.y, source.bottomRight.size.y));
+
+    const float horizontalBorder = leftWidth + rightWidth;
+    if (horizontalBorder > bounds.size.x && horizontalBorder > 0.0f) {
+        const float scale = std::max(0.0f, bounds.size.x) / horizontalBorder;
+        leftWidth *= scale;
+        rightWidth *= scale;
+    }
+    const float verticalBorder = topHeight + bottomHeight;
+    if (verticalBorder > bounds.size.y && verticalBorder > 0.0f) {
+        const float scale = std::max(0.0f, bounds.size.y) / verticalBorder;
+        topHeight *= scale;
+        bottomHeight *= scale;
+    }
+
+    const float centerWidth = std::max(0.0f, bounds.size.x - leftWidth - rightWidth);
+    const float centerHeight = std::max(0.0f, bounds.size.y - topHeight - bottomHeight);
+    const float centerX = bounds.position.x + leftWidth;
+    const float rightX = centerX + centerWidth;
+    const float centerY = bounds.position.y + topHeight;
+    const float bottomY = centerY + centerHeight;
+
+    return {{
+        sf::FloatRect{{bounds.position.x, bounds.position.y}, {leftWidth, topHeight}},
+        sf::FloatRect{{centerX, bounds.position.y}, {centerWidth, topHeight}},
+        sf::FloatRect{{rightX, bounds.position.y}, {rightWidth, topHeight}},
+        sf::FloatRect{{bounds.position.x, centerY}, {leftWidth, centerHeight}},
+        sf::FloatRect{{centerX, centerY}, {centerWidth, centerHeight}},
+        sf::FloatRect{{rightX, centerY}, {rightWidth, centerHeight}},
+        sf::FloatRect{{bounds.position.x, bottomY}, {leftWidth, bottomHeight}},
+        sf::FloatRect{{centerX, bottomY}, {centerWidth, bottomHeight}},
+        sf::FloatRect{{rightX, bottomY}, {rightWidth, bottomHeight}}
+    }};
+}
+
+void drawAtlasSliceStretched_(sf::RenderTarget& target,
+                              const sf::IntRect& source,
+                              const sf::FloatRect& destination,
+                              sf::Color tint) {
+    if (!s_uiElementsAtlasTexture || destination.size.x <= 0.0f ||
+        destination.size.y <= 0.0f) {
+        return;
+    }
+    sf::Sprite sprite(*s_uiElementsAtlasTexture, source);
+    sprite.setPosition(destination.position);
+    sprite.setScale({destination.size.x / static_cast<float>(source.size.x),
+                     destination.size.y / static_cast<float>(source.size.y)});
+    sprite.setColor(tint);
+    target.draw(sprite);
+}
+
+bool resolveNineSliceClose_(const NineSlicePanelData& data,
+                            sf::IntRect& normal, sf::IntRect& hovered,
+                            sf::IntRect& insetReference) {
+    return data.closeButton && data.closeButtonAvailable &&
+           getUiAtlasSliceRect(data.closeButton->normalSlice, normal) &&
+           getUiAtlasSliceRect(data.closeButton->hoveredSlice, hovered) &&
+           getUiAtlasSliceRect(data.closeButton->insetReferenceSlice, insetReference);
+}
+
+bool resolveNineSliceUnavailableClose_(
+    const NineSlicePanelData& data,
+    sf::IntRect& unavailable,
+    sf::IntRect& insetReference) {
+    return data.closeButton && !data.closeButtonAvailable &&
+           !data.closeButton->unavailableSlice.empty() &&
+           getUiAtlasSliceRect(
+               data.closeButton->unavailableSlice, unavailable) &&
+           getUiAtlasSliceRect(
+               data.closeButton->insetReferenceSlice, insetReference);
+}
+
+} // namespace
+
 bool initFonts(const std::string& regularPath, const std::string& boldPath) {
     auto openFont = [](sf::Font& font, std::vector<std::uint8_t>& storage,
                        const std::string& path) {
@@ -499,9 +617,12 @@ void shutdown() {
     s_activeFontSizeQuantum = 1;
     s_uiElementsAtlasTexture.reset();
     s_uiAtlasSlices.clear();
+    s_uiAtlasSliceAliases.clear();
+    s_defaultTextButtonNineSliceData.reset();
     s_uiAtlasSlicesResolved = false;
     s_closeWindowSliceResolved = false;
     s_closeWindowSliceLoaded = false;
+    s_nineSlicePanelTint = sf::Color::White;
     s_initialized = false;
     s_initializationResult = {};
     ++s_initializationRevision;
@@ -918,10 +1039,9 @@ void drawCloseWindowButton(sf::RenderWindow& window, const sf::FloatRect& rect, 
         sf::Sprite closeIcon(*s_uiElementsAtlasTexture, s_closeWindowSliceRect);
         float iconW = static_cast<float>(std::max(1, s_closeWindowSliceRect.size.x));
         float iconH = static_cast<float>(std::max(1, s_closeWindowSliceRect.size.y));
-        float pad = hovered ? 1.0f : 2.0f;
+        constexpr float pad = 2.0f;
         float scale = std::min((rect.size.x - pad * 2.0f) / iconW,
                                (rect.size.y - pad * 2.0f) / iconH);
-        if (hovered) scale *= 1.05f;
         if (scale <= 0.0f) scale = 1.0f;
         closeIcon.setScale({scale, scale});
 
@@ -941,15 +1061,128 @@ void drawCloseWindowButton(sf::RenderWindow& window, const sf::FloatRect& rect, 
     const sf::Color color = hovered ? theme.buttonDangerHover
                                     : theme.buttonDangerBorder;
     const float inset = std::max(
-        2.0f, std::min(rect.size.x, rect.size.y) * (hovered ? 0.20f : 0.25f));
+        2.0f, std::min(rect.size.x, rect.size.y) * 0.25f);
     drawCross(window, rect, color, inset, hovered ? 2.0f : 1.5f);
 }
 
 bool getUiAtlasSliceRect(const std::string& sliceName, sf::IntRect& outRect) {
     if (!ensureUiAtlasSlicesLoaded_()) return false;
-    auto it = s_uiAtlasSlices.find(sliceName);
+    const auto alias = s_uiAtlasSliceAliases.find(sliceName);
+    const std::string& resolvedName = alias == s_uiAtlasSliceAliases.end()
+        ? sliceName
+        : alias->second;
+    auto it = s_uiAtlasSlices.find(resolvedName);
     if (it == s_uiAtlasSlices.end()) return false;
     outRect = it->second;
+    return true;
+}
+
+void setUiAtlasSliceAlias(const std::string& logicalName,
+                          const std::string& targetName) {
+    if (logicalName.empty()) return;
+    if (targetName.empty()) {
+        s_uiAtlasSliceAliases.erase(logicalName);
+        return;
+    }
+    s_uiAtlasSliceAliases[logicalName] = targetName;
+}
+
+void clearUiAtlasSliceAliases() {
+    s_uiAtlasSliceAliases.clear();
+}
+
+void setDefaultTextButtonNineSliceData(
+    std::optional<NineSlicePanelData> data) {
+    s_defaultTextButtonNineSliceData = std::move(data);
+}
+
+const NineSlicePanelData* getDefaultTextButtonNineSliceData() {
+    return s_defaultTextButtonNineSliceData
+        ? &*s_defaultTextButtonNineSliceData
+        : nullptr;
+}
+
+void setNineSlicePanelTint(sf::Color tint) {
+    s_nineSlicePanelTint = tint;
+}
+
+sf::Color getNineSlicePanelTint() {
+    return s_nineSlicePanelTint;
+}
+
+std::optional<sf::FloatRect> getNineSlicePanelCloseBounds(
+    const sf::FloatRect& bounds, const NineSlicePanelData& data) {
+    if (bounds.size.x <= 0.0f || bounds.size.y <= 0.0f) return std::nullopt;
+
+    ResolvedNineSlicePanel resolved;
+    if (!resolveNineSlicePanel_(data, resolved)) return std::nullopt;
+
+    sf::IntRect normal;
+    sf::IntRect hovered;
+    sf::IntRect insetReference;
+    if (!resolveNineSliceClose_(data, normal, hovered, insetReference)) {
+        return std::nullopt;
+    }
+    return layoutNineSlicePanel_(bounds, resolved).pieces[2];
+}
+
+bool drawNineSlicePanel(sf::RenderTarget& target, const sf::FloatRect& bounds,
+                        const NineSlicePanelData& data, bool closeHovered) {
+    return drawNineSlicePanel(
+    target, bounds, data, closeHovered, getNineSlicePanelTint());
+}
+
+bool drawNineSlicePanel(sf::RenderTarget& target, const sf::FloatRect& bounds,
+                        const NineSlicePanelData& data, bool closeHovered,
+                        sf::Color tint) {
+    if (bounds.size.x <= 0.0f || bounds.size.y <= 0.0f) return false;
+
+    ResolvedNineSlicePanel resolved;
+    if (!resolveNineSlicePanel_(data, resolved)) return false;
+
+    const NineSliceLayout layout = layoutNineSlicePanel_(bounds, resolved);
+    const std::array<sf::IntRect, 9> sources{
+        resolved.topLeft, resolved.top, resolved.topRight,
+        resolved.left, resolved.center, resolved.right,
+        resolved.bottomLeft, resolved.bottom, resolved.bottomRight};
+    for (std::size_t index = 0; index < sources.size(); ++index) {
+        drawAtlasSliceStretched_(
+            target, sources[index], layout.pieces[index], tint);
+    }
+
+    sf::IntRect normal;
+    sf::IntRect hovered;
+    sf::IntRect unavailable;
+    sf::IntRect insetReference;
+    const bool availableClose = resolveNineSliceClose_(
+        data, normal, hovered, insetReference);
+    const bool unavailableClose = !availableClose &&
+        resolveNineSliceUnavailableClose_(
+            data, unavailable, insetReference);
+    if (availableClose || unavailableClose) {
+        const sf::FloatRect& corner = layout.pieces[2];
+        const sf::IntRect& closeSource = unavailableClose
+            ? unavailable
+            : (closeHovered ? hovered : normal);
+        const sf::IntRect& footprintSource = unavailableClose
+            ? unavailable
+            : normal;
+        const float scaleX = corner.size.x /
+            static_cast<float>(resolved.topRight.size.x);
+        const float scaleY = corner.size.y /
+            static_cast<float>(resolved.topRight.size.y);
+        const sf::Vector2f closeSize{
+            static_cast<float>(footprintSource.size.x) * scaleX,
+            static_cast<float>(footprintSource.size.y) * scaleY};
+        const sf::Vector2f inset{
+            static_cast<float>(insetReference.size.x) * scaleX,
+            static_cast<float>(insetReference.size.y) * scaleY};
+        const sf::FloatRect closeBounds{
+            {corner.position.x + corner.size.x - inset.x - closeSize.x,
+             corner.position.y + inset.y},
+            closeSize};
+        drawAtlasSliceStretched_(target, closeSource, closeBounds, tint);
+    }
     return true;
 }
 

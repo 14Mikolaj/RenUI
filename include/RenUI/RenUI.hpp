@@ -193,9 +193,73 @@ RENUI_API void drawGeometryGlyph(
 // This is the shared renderer for all panel/menu/window close affordances.
 RENUI_API void drawCloseWindowButton(sf::RenderWindow& window, const sf::FloatRect& rect, bool hovered);
 
+// Optional named-atlas skin for a panel. All nine panel slices must resolve
+// before the skin is drawn; otherwise callers retain their primitive fallback.
+struct NineSliceCloseButtonData {
+    std::string normalSlice;
+    std::string hoveredSlice;
+    // The reference slice is not drawn. Its width is the right inset and its
+    // height is the top inset of the close artwork inside the top-right corner.
+    std::string insetReferenceSlice;
+    // Optional artwork shown when a panel has close chrome but is not
+    // dismissible. It remains visual-only and never creates a hit target.
+    std::string unavailableSlice;
+};
+
+struct NineSlicePanelData {
+    std::string topLeftSlice;
+    std::string topSlice;
+    std::string topRightSlice;
+    std::string leftSlice;
+    std::string centerSlice;
+    std::string rightSlice;
+    std::string bottomLeftSlice;
+    std::string bottomSlice;
+    std::string bottomRightSlice;
+    std::optional<NineSliceCloseButtonData> closeButton;
+    bool closeButtonAvailable{true};
+};
+
+// Process-wide tint used by the no-tint nine-slice draw path and skinned
+// Panel/DraggableWindow instances. Useful for live application opacity
+// preferences without rebuilding every existing window.
+RENUI_API void setNineSlicePanelTint(sf::Color tint);
+RENUI_API sf::Color getNineSlicePanelTint();
+
+// Draw a panel skin from the shared UI atlas. Corners retain their source size
+// unless the destination is too small, while edges and the centre stretch.
+// Returns false without drawing when any required panel slice is unavailable.
+RENUI_API bool drawNineSlicePanel(sf::RenderTarget& target,
+                                  const sf::FloatRect& bounds,
+                                  const NineSlicePanelData& data,
+                                  bool closeHovered = false);
+RENUI_API bool drawNineSlicePanel(sf::RenderTarget& target,
+                                  const sf::FloatRect& bounds,
+                                  const NineSlicePanelData& data,
+                                  bool closeHovered,
+                                  sf::Color tint);
+
+// The complete top-right corner is the stable close hit target. Returns no
+// bounds when the close artwork is unavailable, disabled, or cannot resolve.
+RENUI_API std::optional<sf::FloatRect> getNineSlicePanelCloseBounds(
+    const sf::FloatRect& bounds, const NineSlicePanelData& data);
+
 // Resolve a named slice from the shared ui atlas.
 // Returns false when the atlas or slice is unavailable.
 RENUI_API bool getUiAtlasSliceRect(const std::string& sliceName, sf::IntRect& outRect);
+
+// Map a stable logical slice name to a style-specific atlas slice. Aliases
+// are resolved at draw time, so existing widgets can switch styles live.
+// Passing an empty target removes that alias.
+RENUI_API void setUiAtlasSliceAlias(const std::string& logicalName,
+                                    const std::string& targetName);
+RENUI_API void clearUiAtlasSliceAliases();
+
+// Optional process-wide skin used by framed UIButtons with non-empty labels.
+// Icon-only and explicitly frameless buttons retain their existing renderer.
+RENUI_API void setDefaultTextButtonNineSliceData(
+    std::optional<NineSlicePanelData> data);
+RENUI_API const NineSlicePanelData* getDefaultTextButtonNineSliceData();
 
 // Draw a generic icon button using a named slice from the shared ui atlas.
 // Falls back to a simple panel when the slice cannot be resolved.
@@ -418,7 +482,13 @@ public:
     Panel(const sf::Vector2f& position, const sf::Vector2f& size,
           sf::Color fillColor = getTheme().panelBackground,
           sf::Color outlineColor = getTheme().panelBorder,
-          float outlineThickness = 2.0f);
+            float outlineThickness = 2.0f);
+        Panel(const sf::Vector2f& position, const sf::Vector2f& size,
+            sf::Color fillColor, sf::Color outlineColor,
+            float outlineThickness,
+            std::optional<NineSlicePanelData> nineSliceData);
+    Panel(const sf::Vector2f& position, const sf::Vector2f& size,
+            const NineSlicePanelData& nineSliceData);
 
     void setPosition(float x, float y);
     void setPosition(const sf::Vector2f& pos);
@@ -428,12 +498,18 @@ public:
     void setFillColor(sf::Color color);
     void setOutlineColor(sf::Color color);
     void setOutlineThickness(float t);
+    void setNineSliceData(std::optional<NineSlicePanelData> data);
+    const std::optional<NineSlicePanelData>& getNineSliceData() const;
+    void setCloseHovered(bool hovered);
+    std::optional<sf::FloatRect> getCloseButtonBounds() const;
     bool contains(const sf::Vector2f& point) const;
     sf::FloatRect getGlobalBounds() const;
     void draw(sf::RenderWindow& window) const;
 
 private:
     sf::RectangleShape shape_;
+    std::optional<NineSlicePanelData> nineSliceData_;
+    bool closeHovered_ = false;
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -673,6 +749,7 @@ private:
     sf::RectangleShape box_;
     bool active_ = false;
     bool passwordMode_ = false;
+    bool sensitive_ = false;
     std::string content_;
     std::string placeholder_;
     std::size_t maxLength_ = 0;
@@ -731,6 +808,10 @@ public:
 
     // Events — returns true if the event was handled (consumed by the area).
     bool handleEvent(const sf::Event& event);
+    // Use when the host renders through a scaled/anchored view. Mouse press
+    // and selection-drag coordinates use mappedPointer; keyboard/text event
+    // behavior is identical to the compatibility one-argument overload.
+    bool handleEvent(const sf::Event& event, const sf::Vector2f& mappedPointer);
 
     // Content
     std::string getText() const { return content_; }
@@ -959,10 +1040,18 @@ public:
 
     // Event handling (drag, close button). Returns true if event was consumed.
     bool handleEvent(const sf::Event& event, const sf::RenderWindow& window);
+    // Use when the host already mapped the pointer through the UI view used
+    // for rendering. Pointer press, drag, and wheel routing use mappedPointer.
+    bool handleEvent(const sf::Event& event, const sf::Vector2f& mappedPointer);
 
     // Draw the window chrome (panel + title + close button).
     // Call this first, then draw custom content inside the content area.
     void drawChrome(sf::RenderWindow& window);
+
+    // Opt into atlas-backed panel chrome. Missing resources fall back to the
+    // existing primitive panel and standard close control.
+    void setNineSliceData(std::optional<NineSlicePanelData> data);
+    const std::optional<NineSlicePanelData>& getNineSliceData() const;
 
     // Getters for content area (excluding header)
     sf::Vector2f getContentPosition() const;
@@ -1024,8 +1113,12 @@ protected:
     sf::Vector2f dragOffset_;
 
     std::uint64_t layeringPriority_ = 0;
+    std::optional<NineSlicePanelData> nineSliceData_;
 
     void clampToVisibleBounds_();
+    sf::FloatRect getCloseButtonBounds_() const;
+    bool handleEventImpl_(const sf::Event& event,
+                          const sf::Vector2f& mappedPointer);
 
     // Close button size
     static constexpr float CLOSE_BTN_SIZE = 24.0f;

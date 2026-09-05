@@ -239,6 +239,14 @@ void DraggableWindow::close() {
 
 void DraggableWindow::setTitle(const std::string& title) { title_ = title; }
 
+void DraggableWindow::setNineSliceData(std::optional<NineSlicePanelData> data) {
+    nineSliceData_ = std::move(data);
+}
+
+const std::optional<NineSlicePanelData>& DraggableWindow::getNineSliceData() const {
+    return nineSliceData_;
+}
+
 void DraggableWindow::setUIAnchor(UIAnchor anchor) {
     uiAnchor_ = anchor;
     // Preserve the authored default center until a responsive caller has had
@@ -293,40 +301,59 @@ void DraggableWindow::bringToFront() {
     layeringPriority_ = ++gNextWindowLayeringPriority;
 }
 
-bool DraggableWindow::handleEvent(const sf::Event& event, const sf::RenderWindow& window) {
+bool DraggableWindow::handleEvent(const sf::Event& event,
+                                  const sf::RenderWindow& window) {
     if (!open_) return false;
 
     clampToVisibleBounds_();
 
     sf::View uiView = makeUIView(uiAnchor_);
-    sf::Vector2f mousePos = window.mapPixelToCoords(
-        (logicalMouseOverride_.x >= 0) ? logicalMouseOverride_ : sf::Mouse::getPosition(window), uiView);
+    const sf::Vector2f mousePos = window.mapPixelToCoords(
+        (logicalMouseOverride_.x >= 0)
+            ? logicalMouseOverride_
+            : sf::Mouse::getPosition(window),
+        uiView);
+    return handleEventImpl_(event, mousePos);
+}
 
-    float padding = getTheme().windowPadding;
-    sf::FloatRect closeBtnRect({panelX_ + panelWidth_ - padding - CLOSE_BTN_SIZE,
-                                panelY_ + padding}, {CLOSE_BTN_SIZE, CLOSE_BTN_SIZE});
-    sf::FloatRect titleBarRect({panelX_, panelY_}, {panelWidth_, headerHeight_});
-    sf::FloatRect panelRect({panelX_, panelY_}, {panelWidth_, panelHeight_});
+bool DraggableWindow::handleEvent(const sf::Event& event,
+                                  const sf::Vector2f& mappedPointer) {
+    if (!open_) return false;
 
-    if (auto* mb = event.getIf<sf::Event::MouseButtonPressed>(); mb && mb->button == sf::Mouse::Button::Left) {
-        if (panelRect.contains(mousePos)) {
+    clampToVisibleBounds_();
+    return handleEventImpl_(event, mappedPointer);
+}
+
+bool DraggableWindow::handleEventImpl_(const sf::Event& event,
+                                       const sf::Vector2f& mappedPointer) {
+    const sf::FloatRect closeBtnRect = getCloseButtonBounds_();
+    const sf::FloatRect titleBarRect(
+        {panelX_, panelY_}, {panelWidth_, headerHeight_});
+    const sf::FloatRect panelRect(
+        {panelX_, panelY_}, {panelWidth_, panelHeight_});
+
+    if (auto* mb = event.getIf<sf::Event::MouseButtonPressed>();
+        mb && mb->button == sf::Mouse::Button::Left) {
+        if (panelRect.contains(mappedPointer)) {
             bringToFront();
         }
-        if (closeBtnRect.contains(mousePos)) {
+        if (closeBtnRect.contains(mappedPointer)) {
             close();
             return true;
         }
-        if (titleBarRect.contains(mousePos)) {
+        if (titleBarRect.contains(mappedPointer)) {
             dragging_ = true;
-            dragOffset_ = sf::Vector2f(mousePos.x - panelX_, mousePos.y - panelY_);
+            dragOffset_ = sf::Vector2f(
+                mappedPointer.x - panelX_, mappedPointer.y - panelY_);
             return true;
         }
-        if (panelRect.contains(mousePos)) {
+        if (panelRect.contains(mappedPointer)) {
             return true;
         }
     }
 
-    if (auto* mb = event.getIf<sf::Event::MouseButtonReleased>(); mb && mb->button == sf::Mouse::Button::Left) {
+    if (auto* mb = event.getIf<sf::Event::MouseButtonReleased>();
+        mb && mb->button == sf::Mouse::Button::Left) {
         if (dragging_) {
             dragging_ = false;
             return true;
@@ -334,15 +361,15 @@ bool DraggableWindow::handleEvent(const sf::Event& event, const sf::RenderWindow
     }
 
     if (event.getIf<sf::Event::MouseMoved>() && dragging_) {
-        panelX_ = mousePos.x - dragOffset_.x;
-        panelY_ = mousePos.y - dragOffset_.y;
+        panelX_ = mappedPointer.x - dragOffset_.x;
+        panelY_ = mappedPointer.y - dragOffset_.y;
         clampToVisibleBounds_();
         return true;
     }
 
     if (auto* mws = event.getIf<sf::Event::MouseWheelScrolled>()) {
-        if (panelRect.contains(mousePos)) {
-            return handleScroll(mws->delta, mousePos);
+        if (panelRect.contains(mappedPointer)) {
+            return handleScroll(mws->delta, mappedPointer);
         }
     }
 
@@ -369,9 +396,13 @@ void DraggableWindow::drawChrome(sf::RenderWindow& window) {
     const Theme theme = getTheme();
     float padding = theme.windowPadding;
 
+    const sf::FloatRect closeBtnRect = getCloseButtonBounds_();
+
     // Panel background
     Panel panel(sf::Vector2f(panelX_, panelY_), sf::Vector2f(panelWidth_, panelHeight_),
-                theme.windowBackground, theme.windowBorder);
+                theme.windowBackground, theme.windowBorder, 2.0f,
+                nineSliceData_);
+    panel.setCloseHovered(closeBtnRect.contains(mousePos));
     panel.draw(window);
 
     // Title
@@ -381,13 +412,36 @@ void DraggableWindow::drawChrome(sf::RenderWindow& window) {
         title.draw(window);
     }
 
-    // Close button
-    {
-        sf::FloatRect closeBtnRect({panelX_ + panelWidth_ - padding - CLOSE_BTN_SIZE,
-                                    panelY_ + padding},
-                                   {CLOSE_BTN_SIZE, CLOSE_BTN_SIZE});
+    // The skinned panel draws its own corner close artwork. Retain the
+    // standard close control whenever that optional artwork is unavailable.
+    const bool closeUnavailable = nineSliceData_ &&
+        nineSliceData_->closeButton &&
+        !nineSliceData_->closeButtonAvailable;
+    if (!closeUnavailable &&
+        (!nineSliceData_ || !getNineSlicePanelCloseBounds(
+            {{panelX_, panelY_}, {panelWidth_, panelHeight_}},
+            *nineSliceData_))) {
         drawCloseWindowButton(window, closeBtnRect, closeBtnRect.contains(mousePos));
     }
+}
+
+sf::FloatRect DraggableWindow::getCloseButtonBounds_() const {
+    const sf::FloatRect panelBounds{{panelX_, panelY_}, {panelWidth_, panelHeight_}};
+    if (nineSliceData_) {
+        if (nineSliceData_->closeButton &&
+            !nineSliceData_->closeButtonAvailable) {
+            return {};
+        }
+        if (const auto closeBounds =
+                getNineSlicePanelCloseBounds(panelBounds, *nineSliceData_)) {
+            return *closeBounds;
+        }
+    }
+
+    const float padding = getTheme().windowPadding;
+    return {{panelX_ + panelWidth_ - padding - CLOSE_BTN_SIZE,
+             panelY_ + padding},
+            {CLOSE_BTN_SIZE, CLOSE_BTN_SIZE}};
 }
 
 sf::Vector2f DraggableWindow::getContentPosition() const {

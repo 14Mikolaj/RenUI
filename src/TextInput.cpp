@@ -8,6 +8,7 @@
 #include <RenUI/RenUI.hpp>
 #include <SFML/Window/Clipboard.hpp>
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 
 namespace RenUI {
@@ -18,6 +19,15 @@ constexpr float INPUT_HORIZONTAL_PADDING = 6.0f;
 constexpr float INPUT_VERTICAL_PADDING = 2.0f;
 constexpr float INPUT_CARET_WIDTH = 1.5f;
 constexpr float INPUT_CARET_MARGIN = 1.0f;
+
+void securelyClear(std::string& value) noexcept {
+    if (!value.empty()) {
+        volatile char* bytes = &value[0];
+        for (std::size_t i = 0; i < value.size(); ++i) bytes[i] = 0;
+        std::atomic_signal_fence(std::memory_order_seq_cst);
+    }
+    value.clear();
+}
 
 } // namespace
 
@@ -30,7 +40,7 @@ UITextInput::UITextInput() {
 }
 
 UITextInput::UITextInput(const sf::Vector2f& position, const sf::Vector2f& size, bool passwordMode)
-    : passwordMode_(passwordMode) {
+    : passwordMode_(passwordMode), sensitive_(passwordMode) {
     const Theme theme = getTheme();
     box_.setSize(size);
     box_.setPosition(position);
@@ -63,6 +73,10 @@ void UITextInput::eraseSelection_() {
     std::size_t left = std::min(selectionLeft_(), content_.size());
     std::size_t right = std::min(selectionRight_(), content_.size());
     if (right > left) {
+        if (sensitive_) {
+            std::fill(content_.begin() + static_cast<std::ptrdiff_t>(left),
+                      content_.begin() + static_cast<std::ptrdiff_t>(right), 0);
+        }
         content_.erase(left, right - left);
     }
     cursorPos_ = left;
@@ -342,7 +356,7 @@ void UITextInput::handleEvent(const sf::Event& event,
         }
 
         if (ctrl && kp->code == sf::Keyboard::Key::C) {
-            if (hasSelection_()) {
+            if (!sensitive_ && hasSelection_()) {
                 sf::Clipboard::setString(content_.substr(selectionLeft_(), selectionRight_() - selectionLeft_()));
             }
             return;
@@ -350,7 +364,10 @@ void UITextInput::handleEvent(const sf::Event& event,
 
         if (ctrl && kp->code == sf::Keyboard::Key::X) {
             if (hasSelection_()) {
-                sf::Clipboard::setString(content_.substr(selectionLeft_(), selectionRight_() - selectionLeft_()));
+                if (!sensitive_) {
+                    sf::Clipboard::setString(content_.substr(
+                        selectionLeft_(), selectionRight_() - selectionLeft_()));
+                }
                 eraseSelection_();
                 resetCaretBlink_();
             }
@@ -426,6 +443,7 @@ void UITextInput::handleEvent(const sf::Event& event,
             if (hasSelection_()) {
                 eraseSelection_();
             } else if (cursorPos_ > 0) {
+                if (sensitive_) content_[cursorPos_ - 1] = 0;
                 content_.erase(cursorPos_ - 1, 1);
                 cursorPos_--;
                 clearSelection_();
@@ -438,6 +456,7 @@ void UITextInput::handleEvent(const sf::Event& event,
             if (hasSelection_()) {
                 eraseSelection_();
             } else if (cursorPos_ < content_.size()) {
+                if (sensitive_) content_[cursorPos_] = 0;
                 content_.erase(cursorPos_, 1);
                 clearSelection_();
             }
@@ -472,6 +491,7 @@ void UITextInput::setActive(bool a) {
 bool UITextInput::isActive() const { return active_; }
 std::string UITextInput::getText() const { return content_; }
 void UITextInput::setText(const std::string& text) {
+    if (sensitive_) securelyClear(content_);
     content_ = maxLength_ > 0 && text.size() > maxLength_
         ? text.substr(0, maxLength_)
         : text;
@@ -500,7 +520,8 @@ bool UITextInput::insertText(std::string_view text) {
 }
 
 void UITextInput::clear() {
-    content_.clear();
+    if (sensitive_) securelyClear(content_);
+    else content_.clear();
     cursorPos_ = 0;
     clearSelection_();
     resetCaretBlink_();
@@ -529,6 +550,7 @@ unsigned int UITextInput::getFontSize() const { return fontSize_; }
 
 void UITextInput::setPasswordMode(bool passwordMode) {
     passwordMode_ = passwordMode;
+    if (passwordMode) sensitive_ = true;
     resetCaretBlink_();
 }
 

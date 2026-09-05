@@ -482,13 +482,24 @@ void UITextArea::draw(sf::RenderWindow& window) const {
 // ── Events ────────────────────────────────────────────────────────
 
 bool UITextArea::handleEvent(const sf::Event& event) {
+    sf::Vector2f rawPointer{0.0f, 0.0f};
+    if (const auto* pressed = event.getIf<sf::Event::MouseButtonPressed>()) {
+        rawPointer = static_cast<sf::Vector2f>(pressed->position);
+    } else if (const auto* moved = event.getIf<sf::Event::MouseMoved>()) {
+        rawPointer = static_cast<sf::Vector2f>(moved->position);
+    } else if (const auto* released = event.getIf<sf::Event::MouseButtonReleased>()) {
+        rawPointer = static_cast<sf::Vector2f>(released->position);
+    }
+    return handleEvent(event, rawPointer);
+}
+
+bool UITextArea::handleEvent(const sf::Event& event,
+                             const sf::Vector2f& mappedPointer) {
     if (auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button == sf::Mouse::Button::Left) {
-            sf::Vector2f p(static_cast<float>(mb->position.x),
-                            static_cast<float>(mb->position.y));
-            if (contains(p)) {
+            if (contains(mappedPointer)) {
                 setActive(true);
-                cursorPos_ = indexFromMouse_(p);
+                cursorPos_ = indexFromMouse_(mappedPointer);
                 selectionStart_ = cursorPos_;
                 selectionEnd_ = cursorPos_;
                 selectionAnchor_ = cursorPos_;
@@ -506,9 +517,7 @@ bool UITextArea::handleEvent(const sf::Event& event) {
 
     if (auto* mm = event.getIf<sf::Event::MouseMoved>()) {
         if (active_ && mouseSelecting_) {
-            sf::Vector2f p(static_cast<float>(mm->position.x),
-                            static_cast<float>(mm->position.y));
-            cursorPos_ = indexFromMouse_(p);
+            cursorPos_ = indexFromMouse_(mappedPointer);
             if (selectionAnchor_) {
                 selectionStart_ = std::min(*selectionAnchor_, cursorPos_);
                 selectionEnd_ = std::max(*selectionAnchor_, cursorPos_);

@@ -45,6 +45,42 @@ float getHoverGlowTimeSeconds() {
     return clock.getElapsedTime().asSeconds();
 }
 
+sf::Color multiplyColor(sf::Color lhs, sf::Color rhs) {
+    return sf::Color(
+        static_cast<std::uint8_t>(
+            static_cast<unsigned int>(lhs.r) * rhs.r / 255U),
+        static_cast<std::uint8_t>(
+            static_cast<unsigned int>(lhs.g) * rhs.g / 255U),
+        static_cast<std::uint8_t>(
+            static_cast<unsigned int>(lhs.b) * rhs.b / 255U),
+        static_cast<std::uint8_t>(
+            static_cast<unsigned int>(lhs.a) * rhs.a / 255U));
+}
+
+sf::Color textButtonSkinTint(UIButtonStyle style,
+                             bool enabled,
+                             bool selected,
+                             bool focused,
+                             bool hovered) {
+    sf::Color stateTint = sf::Color::White;
+    if (!enabled) {
+        stateTint = sf::Color(150, 155, 165, 175);
+    } else if (style == UIButtonStyle::Danger) {
+        stateTint = hovered
+            ? sf::Color(255, 220, 220)
+            : sf::Color(235, 190, 190);
+    } else if (selected || focused) {
+        stateTint = sf::Color(205, 230, 255);
+    } else if (style == UIButtonStyle::Primary) {
+        stateTint = hovered
+            ? sf::Color::White
+            : sf::Color(215, 232, 250);
+    } else if (hovered) {
+        stateTint = sf::Color(225, 240, 255);
+    }
+    return multiplyColor(stateTint, getNineSlicePanelTint());
+}
+
 void drawHoverGlowBackdrop(sf::RenderWindow& window,
                            const sf::Vector2f& position,
                            const sf::Vector2f& size,
@@ -269,13 +305,26 @@ Panel::Panel() {
 }
 
 Panel::Panel(const sf::Vector2f& position, const sf::Vector2f& size,
-             sf::Color fillColor, sf::Color outlineColor, float outlineThickness) {
+             sf::Color fillColor, sf::Color outlineColor, float outlineThickness)
+    : Panel(position, size, fillColor, outlineColor, outlineThickness,
+            std::nullopt) {}
+
+Panel::Panel(const sf::Vector2f& position, const sf::Vector2f& size,
+             sf::Color fillColor, sf::Color outlineColor,
+             float outlineThickness,
+             std::optional<NineSlicePanelData> nineSliceData)
+    : nineSliceData_(std::move(nineSliceData)) {
     shape_.setPosition(position);
     shape_.setSize(size);
     shape_.setFillColor(fillColor);
     shape_.setOutlineColor(outlineColor);
     shape_.setOutlineThickness(outlineThickness);
 }
+
+Panel::Panel(const sf::Vector2f& position, const sf::Vector2f& size,
+             const NineSlicePanelData& nineSliceData)
+    : Panel(position, size, getTheme().panelBackground, getTheme().panelBorder,
+            2.0f, nineSliceData) {}
 
 void Panel::setPosition(float x, float y) { shape_.setPosition({x, y}); }
 void Panel::setPosition(const sf::Vector2f& pos) { shape_.setPosition(pos); }
@@ -285,9 +334,52 @@ sf::Vector2f Panel::getSize() const { return shape_.getSize(); }
 void Panel::setFillColor(sf::Color color) { shape_.setFillColor(color); }
 void Panel::setOutlineColor(sf::Color color) { shape_.setOutlineColor(color); }
 void Panel::setOutlineThickness(float t) { shape_.setOutlineThickness(t); }
-bool Panel::contains(const sf::Vector2f& point) const { return shape_.getGlobalBounds().contains(point); }
-sf::FloatRect Panel::getGlobalBounds() const { return shape_.getGlobalBounds(); }
-void Panel::draw(sf::RenderWindow& window) const { window.draw(shape_); }
+void Panel::setNineSliceData(std::optional<NineSlicePanelData> data) {
+    nineSliceData_ = std::move(data);
+}
+const std::optional<NineSlicePanelData>& Panel::getNineSliceData() const {
+    return nineSliceData_;
+}
+void Panel::setCloseHovered(bool hovered) { closeHovered_ = hovered; }
+std::optional<sf::FloatRect> Panel::getCloseButtonBounds() const {
+    if (!nineSliceData_) return std::nullopt;
+    return getNineSlicePanelCloseBounds(
+        {shape_.getPosition(), shape_.getSize()}, *nineSliceData_);
+}
+bool Panel::contains(const sf::Vector2f& point) const {
+    return getGlobalBounds().contains(point);
+}
+sf::FloatRect Panel::getGlobalBounds() const {
+    if (nineSliceData_) return {shape_.getPosition(), shape_.getSize()};
+    return shape_.getGlobalBounds();
+}
+void Panel::draw(sf::RenderWindow& window) const {
+    if (nineSliceData_ &&
+        drawNineSlicePanel(window, {shape_.getPosition(), shape_.getSize()},
+                           *nineSliceData_, closeHovered_)) {
+        return;
+    }
+    if (nineSliceData_) {
+        const sf::Color tint = getNineSlicePanelTint();
+        const auto multiply = [tint](sf::Color color) {
+            return sf::Color(
+                static_cast<std::uint8_t>(
+                    static_cast<unsigned int>(color.r) * tint.r / 255U),
+                static_cast<std::uint8_t>(
+                    static_cast<unsigned int>(color.g) * tint.g / 255U),
+                static_cast<std::uint8_t>(
+                    static_cast<unsigned int>(color.b) * tint.b / 255U),
+                static_cast<std::uint8_t>(
+                    static_cast<unsigned int>(color.a) * tint.a / 255U));
+        };
+        sf::RectangleShape fallback = shape_;
+        fallback.setFillColor(multiply(shape_.getFillColor()));
+        fallback.setOutlineColor(multiply(shape_.getOutlineColor()));
+        window.draw(fallback);
+        return;
+    }
+    window.draw(shape_);
+}
 
 // ═══════════════════════════════════════════════════════════════════
 //  ICON SPRITE
@@ -422,7 +514,24 @@ void UIButton::draw(sf::RenderWindow& window) const {
         if (!customOutlineColor_) drawShape.setOutlineColor(theme.buttonHoverBorder);
     }
     if (frameVisible_) {
-        window.draw(drawShape);
+        const NineSlicePanelData* textButtonSkin = label_.empty()
+            ? nullptr
+            : getDefaultTextButtonNineSliceData();
+        const bool skinDrawn = textButtonSkin && drawNineSlicePanel(
+            window, {drawShape.getPosition(), drawShape.getSize()},
+            *textButtonSkin, false,
+            textButtonSkinTint(
+                style_, enabled_, selected_, focused_, hovered_));
+        if (!skinDrawn) {
+            window.draw(drawShape);
+        } else if (selected_ || focused_) {
+            sf::RectangleShape focusOutline(drawShape.getSize());
+            focusOutline.setPosition(drawShape.getPosition());
+            focusOutline.setFillColor(sf::Color::Transparent);
+            focusOutline.setOutlineColor(theme.focusOutline);
+            focusOutline.setOutlineThickness(2.0f);
+            window.draw(focusOutline);
+        }
     }
     if (text_) {
         sf::Text t = *text_;
