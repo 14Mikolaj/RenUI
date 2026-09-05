@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(RenUIInstallConsumer LANGUAGES CXX)
 
-find_package(RenUI 0.1.4 CONFIG REQUIRED)
+find_package(RenUI 0.1.12 CONFIG REQUIRED)
 
 add_executable(renui_install_consumer main.cpp)
 target_link_libraries(renui_install_consumer PRIVATE RenUI::RenUI)
